@@ -4,10 +4,10 @@ Tristan Mills (www.mills.science)
 Created: September 12, 2017
 Last Modified: October 5, 2017
 License: MIT License
-Python version 2.7.13
-    matplotlib version 1.4.3
-    numpy version 1.10.0b1
-    pyephem version 3.7.6
+Python version 3.x
+    matplotlib version >= 1.5.0
+    numpy version >= 1.10.0
+    pyephem version >= 3.7.6
 
 This program saves and displays a planet chart for the given year. The lines represent rise and set times for each
 planet, in between which the planets are visible in the night sky. Location is set using latitude/longitude variables,
@@ -24,9 +24,9 @@ Does not include leap days
 
 # ############################# #
 # Location and Time Preferences #
-latitude = 43.475085
-longitude = -80.552901
-year = 2017
+latitude: float = 43.475085
+longitude: float = -80.552901
+year: int = 2017
 # ^ User customizable!          #
 # ############################# #
 
@@ -35,17 +35,19 @@ from numpy import arange
 from numpy.ma import masked_outside
 from matplotlib import pyplot as plt
 from math import floor, pi
+from typing import List, Tuple, Optional
 
 # # # Functions # # #
 
 
-# handles the creation and formatting of rise and set arrays for a given body
-def get_planet_times(body, times, obs, time_difference):
-    # used for graphing at times between noons, and centering the graph at around midnight
+def get_planet_times(body: ephem.Body, times: List[str], obs: ephem.Observer, time_difference: int) -> Tuple:
+    """
+    Handles the creation and formatting of rise and set arrays for a given body.
+    Returns masked arrays for rise and set times.
+    """
     midnight = -time_difference  # time in UTC that midnight occurs at location
     noon = (-time_difference + 12) % 24  # time in UTC that noon occurs at location
 
-    # create and add times to rise and set arrays, for each day of the year
     body_rise_times = []
     body_set_times = []
     for time in times:
@@ -53,39 +55,41 @@ def get_planet_times(body, times, obs, time_difference):
         body_rise_times.append(get_body_rise(body, time, obs, noon))
         body_set_times.append(get_body_set(body, time, obs, noon))
 
-    # lists are returned as masked arrays to avoid wrap around lines when plotting
     return masked_outside(body_rise_times, (midnight + 10), (midnight - 10)), masked_outside(body_set_times, (midnight + 10), (midnight - 10))
 
 
-# returns the time and date of previous rising
-def get_body_rise(planet, date, obs, noon):
+def get_body_rise(planet: ephem.Body, date: str, obs: ephem.Observer, noon: float) -> Optional[float]:
+    """
+    Returns the time and date of previous rising for a planet.
+    Returns None if there is not a rise within 24 hours.
+    """
     obs.date = date
-    # return no value when there is not a rise within 24 hours
     try:
         rising = obs.next_rising(planet).triple()[2]
-    except:
-        return
-    rising = (rising - floor(rising)) * 24.
+    except Exception:
+        return None
+    rising = (rising - floor(rising)) * 24.0
     if rising > noon:
         return rising - 24
     else:
         return rising
 
 
-# returns the time and date of next setting
-def get_body_set(planet, date, obs, min_time):
+def get_body_set(planet: ephem.Body, date: str, obs: ephem.Observer, min_time: float) -> Optional[float]:
+    """
+    Returns the time and date of next setting for a planet.
+    Returns None if there is not a set within 24 hours.
+    """
     obs.date = date
-    # return no value when there is not a set within 24 hours
     try:
         setting = obs.next_setting(planet).triple()[2]
-    except:
-        return
-    setting = (setting - floor(setting)) * 24.
+    except Exception:
+        return None
+    setting = (setting - floor(setting)) * 24.0
     if setting > min_time:
         return setting - 24
     else:
         return setting
-
 
 # # # Main Program # # #
 
@@ -94,20 +98,19 @@ if longitude == -180.0:
     longitude = 180.0
 
 # out of bounds location data handling
-if -180 > longitude or longitude > 180:
+if not (-180 <= longitude <= 180):
     raise ValueError('Longitude must be between -180 and +180 in units of degrees')
-if -90 > latitude or latitude > 90:
-    raise ValueError('Latitude must be between -180 and +180 in units of degrees')
+if not (-90 <= latitude <= 90):
+    raise ValueError('Latitude must be between -90 and +90 in units of degrees')
 
-# dealing with timezones, an approximate solution for something not straightforward in python
-time_diff = int(longitude / 15)
+time_diff: int = int(longitude // 15)
 
 # creating the observing site
 observing_site = ephem.Observer()
 observing_site.pressure = 0
 observing_site.horizon = '0'
-observing_site.lat = latitude * pi / 180.
-observing_site.lon = longitude * pi / 180.
+observing_site.lat = latitude * pi / 180.0
+observing_site.lon = longitude * pi / 180.0
 
 # load planet data using pyephem
 sun = ephem.Sun()
@@ -123,7 +126,7 @@ n = ephem.Neptune()
 count = 0
 month = 1
 current_year = year
-time_array = []
+time_array: List[str] = []
 days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 cumulative_days = 0
 while current_year == year:
@@ -136,9 +139,9 @@ while current_year == year:
     if month > 12:
         break
     if day >= 10:
-        time_array.append(str(current_year) + '/' + str(int(month)) + '/' + str(int(day)))
+        time_array.append(f"{current_year}/{int(month)}/{int(day)}")
     else:
-        time_array.append(str(current_year) + '/' + str(int(month)) + '/0' + str(int(day)))
+        time_array.append(f"{current_year}/{int(month)}/0{int(day)}")
     count += 1
 
 # get rise and set masked arrays
@@ -161,13 +164,13 @@ bg_color = 'black'
 grid_color = '#1D1D1D'
 
 fig = plt.figure(1, facecolor=bg_color, edgecolor=fg_color)
-axes = plt.axes((0.1, 0.1, 0.8, 0.8), axisbg=bg_color)
+axes = plt.axes((0.1, 0.1, 0.8, 0.8), facecolor=bg_color)
 
 # plot the rises and sets throughout the year, sets are marked with dashed lines
 plt.plot(sun_rise_times, arange(0, len(sun_rise_times)), label="Sun Rise", color="white")
 plt.plot(sun_set_times, arange(0, len(sun_set_times)), '--', label="Sun Set", color="white")
-plt.plot(sun_twilight_rise_times, arange(0, len(sun_twilight_rise_times)), label="Sun Rise", color="grey")
-plt.plot(sun_twilight_set_times, arange(0, len(sun_twilight_set_times)), '--', label="Sun Set", color="grey")
+plt.plot(sun_twilight_rise_times, arange(0, len(sun_twilight_rise_times)), label="Sun Twilight Rise", color="grey")
+plt.plot(sun_twilight_set_times, arange(0, len(sun_twilight_set_times)), '--', label="Sun Twilight Set", color="grey")
 plt.plot(mercury_rise_times, arange(0, len(mercury_rise_times)), label="Mercury Rise", color="brown")
 plt.plot(mercury_set_times, arange(0, len(mercury_set_times)), '--', label="Mercury Set", color="brown")
 plt.plot(venus_rise_times, arange(0, len(venus_rise_times)), label="Venus Rise", color="yellow")
@@ -202,7 +205,7 @@ axes.grid(color=grid_color, linestyle='-', linewidth=1)
 axes.set_axisbelow(True)
 
 # titles, labels, and legend
-plt.title('Planet Rise and Set Times Over ' + str(year), color=fg_color)
+plt.title(f'Planet Rise and Set Times Over {year}', color=fg_color)
 plt.xlabel('Hours from Midnight UTC', color=fg_color)
 plt.ylabel('Day of Year', color=fg_color)
 
@@ -213,5 +216,5 @@ for text in legend.get_texts():
     text.set_color(fg_color)
 
 # save figure
-fig.savefig('planet_chart_' + str(year), facecolor=bg_color, bbox_extra_artists=(legend,), bbox_inches='tight')
+fig.savefig(f'planet_chart_{year}', facecolor=bg_color, bbox_extra_artists=(legend,), bbox_inches='tight')
 # plt.show()
